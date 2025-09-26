@@ -18,7 +18,7 @@ ifeq ($(DEBUG),1)
 OPT				= -O0
 DEBUG_FLAGS		= -DDEBUG=1 -g
 else
-ifeq ($(shell type llvm-strip >/dev/null 2>&1 && echo 1),1)
+ifeq ($(shell type llvm-strip1 >/dev/null 2>&1 && echo 1),1)
 STRIP			?= llvm-strip
 else
 ifeq ($(shell type xcrun strip >/dev/null 2>&1 && echo 1),1)
@@ -33,13 +33,13 @@ OPT				= -O3
 DEBUG_FLAGS		= -DNDEBUG=1
 endif
 
-IGCC            ?= xcrun -sdk iphoneos clang -arch arm64 -arch arm64e
+IGCC            ?= xcrun -sdk macosx clang -arch arm64 -arch arm64e
 IGCC_FLAGS      ?= -Wall $(OPT) $(DEBUG_FLAGS) -I$(INC) -I$(LR_INC) -L$(LR_LIB) -lroot_dyn_iphoneos-arm64 -DTARGET=\"$(TARGET)\"
-DYLIB_FLAGS     ?= -shared -miphoneos-version-min=7.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/$(TARGET).$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
-PLUGIN_FLAGS 	?= -shared -miphoneos-version-min=7.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+DYLIB_FLAGS     ?= -shared -mmacos-version-min=13.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/$(TARGET).$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+PLUGIN_FLAGS 	?= -shared -mmacos-version-min=13.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
 SIGN            ?= codesign
 SIGN_FLAGS      ?= -s -
-TAPI            ?= xcrun -sdk iphoneos tapi
+TAPI            ?= xcrun -sdk macosx tapi
 TAPI_FLAGS      ?= stubify --no-uuids --filetype=tbd-v2
 TAR             ?= bsdtar
 TAR_FLAGS       ?= --uid 0 --gid 0
