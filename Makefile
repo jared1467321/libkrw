@@ -27,7 +27,7 @@ ifeq ($(DEBUG),1)
 OPT				= -O0
 DEBUG_FLAGS		= -DDEBUG=1 -g
 else
-ifeq ($(shell type llvm-strip1 >/dev/null 2>&1 && echo 1),1)
+ifeq ($(shell type llvm-strip >/dev/null 2>&1 && echo 1),1)
 STRIP			?= llvm-strip
 else
 ifeq ($(shell type xcrun strip >/dev/null 2>&1 && echo 1),1)
