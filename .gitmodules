@@ -1,4 +1,0 @@
-[submodule "libroot"]
-	path = external/libroot
-	url = https://github.com/opa334/libroot.git
-	branch = main

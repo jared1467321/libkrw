@@ -6,13 +6,22 @@ COMPAT_VERSION  := 1.0.0
 TARGET           = libkrw
 SRC              = src
 INC              = include
-LR_INC         	 = external/libroot/src
-LR_LIB         	 = external/libroot
 PKG              = pkg
 
 ifeq ($(ROOTLESS),1)
 ROOTLESS_ARCH	= 64
-ROOTLESS_PATH	= /var/jb
+ROOTLESS_PATH	= /var/jb/usr/lib
+MINVER			= -miphoneos-version-min=15.0
+BUILD_SDK		= iphoneos
+else ifeq ($(MACOS),1)
+ROOTLESS_ARCH	= 64
+ROOTLESS_PATH	= /opt
+MINVER			= -mmacos-version-min=11.0
+BUILD_SDK		= macosx
+else
+ROOTLESS_PATH	= /usr/lib
+MINVER			= -miphoneos-version-min=11.0
+BUILD_SDK		= iphoneos
 endif
 ifeq ($(DEBUG),1)
 OPT				= -O0
@@ -33,13 +42,13 @@ OPT				= -O3
 DEBUG_FLAGS		= -DNDEBUG=1
 endif
 
-IGCC            ?= xcrun -sdk macosx clang -arch arm64 -arch arm64e
-IGCC_FLAGS      ?= -Wall $(OPT) $(DEBUG_FLAGS) -I$(INC) -I$(LR_INC) -L$(LR_LIB) -lroot_dyn_iphoneos-arm64 -DTARGET=\"$(TARGET)\"
-DYLIB_FLAGS     ?= -shared -mmacos-version-min=13.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/$(TARGET).$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
-PLUGIN_FLAGS 	?= -shared -mmacos-version-min=13.0 -Wl,-install_name,$(ROOTLESS_PATH)/usr/lib/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+IGCC            ?= xcrun -sdk $(BUILD_SDK) clang -arch arm64 -arch arm64e
+IGCC_FLAGS      ?= -Wall $(OPT) $(DEBUG_FLAGS) -I$(INC) -DTARGET=\"$(TARGET)\"
+DYLIB_FLAGS     ?= -shared $(MINVER) -Wl,-install_name,@rpath/$(TARGET).$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+PLUGIN_FLAGS 	?= -shared $(MINVER) -Wl,-install_name,$(ROOTLESS_PATH)/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
 SIGN            ?= codesign
 SIGN_FLAGS      ?= -s -
-TAPI            ?= xcrun -sdk macosx tapi
+TAPI            ?= xcrun -sdk $(BUILD_SDK) tapi
 TAPI_FLAGS      ?= stubify --no-uuids --filetype=tbd-v2
 TAR             ?= bsdtar
 TAR_FLAGS       ?= --uid 0 --gid 0
@@ -52,7 +61,6 @@ all: $(TARGET).$(ABI_VERSION).dylib $(TARGET)-tfp0.dylib $(TARGET).tbd
 deb: $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb $(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)-tfp0_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb
 
 $(TARGET).$(ABI_VERSION).dylib: $(SRC)/libkrw.c $(INC)/*.h
-	@$(MAKE) -C external/libroot
 	$(IGCC) $(IGCC_FLAGS) $(DYLIB_FLAGS) -o $@ $(SRC)/libkrw.c
 ifdef STRIP
 	$(STRIP) -x $@
@@ -61,7 +69,6 @@ endif
 	$(SIGN) $(SIGN_FLAGS) $@
 
 $(TARGET)-tfp0.dylib: $(SRC)/libkrw_tfp0.c $(INC)/*.h
-	@$(MAKE) -C external/libroot
 	$(IGCC) $(IGCC_FLAGS) $(PLUGIN_FLAGS) -o $@ $(SRC)/libkrw_tfp0.c
 ifdef STRIP
 	$(STRIP) -x $@

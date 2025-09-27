@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <libroot.h>
 #include "libkrw.h"
 #include "libkrw_plugin.h"
 #include "libkrw_tfp0.h"
@@ -93,10 +92,17 @@ static int obtain_krw_funcs(void *plugin) {
 static void iterate_plugins(int (*callback)(void *), void **check) {
   struct dirent **plugins;
   char *krw_path = NULL;
-  if(access("/usr/lib/libkrw/", F_OK) == 0) {
-    krw_path = "/usr/lib/libkrw/";
+  if(access("/opt/libkrw/", F_OK) == 0) {
+    krw_path = "/opt/libkrw/";
+  } else if(access("/var/jb/usr/lib/libkrw/", F_OK) == 0) {
+    krw_path = "/var/jb/usr/lib/libkrw/";
+  } else if(access("/usr/local/lib/libkrw/", F_OK) == 0) {
+    krw_path = "/usr/local/lib/libkrw/";
   } else {
-    krw_path = JBROOT_PATH_CSTRING("/usr/lib/libkrw/");
+    if(access("/usr/lib/libkrw/", F_OK) != 0) {
+      return;
+    }
+    krw_path = "/usr/lib/libkrw/";
   }
   libkrw_log(stdout, "[+]: %s: %s: krw_path: %s\n", TARGET, __FUNCTION__, krw_path);
   ssize_t nument = scandir(krw_path, &plugins, &scandir_dylib_select, &scandir_alpha_compar);

@@ -46,7 +46,7 @@ Starting with version 1.1.0, libkrw supports a plugin interface so you no longer
 2. Implement and export either a function called `krw_initializer` or `kcall_initializer` that takes a `krw_handlers_t` argument.
 3. Install all handlers that you support.
 4. Compile with `-Wl,-bundle`.
-5. Name it `/usr/lib/libkrw/[name].dylib`.
+5. Name it `/opt/libkrw/[name].dylib`.
 6. Add this to the `control` of your deb file:  
    ```
    Depends: libkrw
