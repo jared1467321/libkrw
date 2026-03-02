@@ -1,0 +1,50 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  libkrw:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Xcode info
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos clang --version
+          xcrun --sdk iphoneos tapi --version || true
+
+      # Optional but helps if any compression tools are missing/old
+      - name: Install deps
+        run: |
+          brew update
+          brew install xz
+
+      - name: Build (dylib + tbd)
+        run: |
+          make clean || true
+          make all ROOTLESS=1
+
+      - name: Build debs
+        run: |
+          make deb ROOTLESS=1
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          cp -v libkrw.*.dylib libkrw-tfp0.dylib libkrw.tbd dist/ || true
+          cp -v *.deb dist/ || true
+          ls -la dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkrw-${{ github.sha }}
+          path: dist
