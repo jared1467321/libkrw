@@ -8,63 +8,78 @@ SRC              = src
 INC              = include
 PKG              = pkg
 
+# ---- fixed prefix layout (prevents /var/jb/usr/lib/usr/lib) ----
+PREFIX          := /usr
+ROOTLESS_BASE   :=
+ROOTLESS_ARCH   :=
+
 ifeq ($(ROOTLESS),1)
-ROOTLESS_ARCH	= 64
-ROOTLESS_PATH	= /var/jb/usr/lib
-MINVER			= -miphoneos-version-min=15.0
-BUILD_SDK		= iphoneos
+ROOTLESS_ARCH   = 64
+ROOTLESS_BASE   = /var/jb
+MINVER          = -miphoneos-version-min=15.0
+BUILD_SDK       = iphoneos
 else ifeq ($(MACOS),1)
-ROOTLESS_ARCH	= 64
-ROOTLESS_PATH	= /opt
-MINVER			= -mmacos-version-min=11.0
-BUILD_SDK		= macosx
+ROOTLESS_ARCH   = 64
+ROOTLESS_BASE   =
+MINVER          = -mmacos-version-min=11.0
+BUILD_SDK       = macosx
 else
-ROOTLESS_PATH	= /usr/lib
-MINVER			= -miphoneos-version-min=11.0
-BUILD_SDK		= iphoneos
+ROOTLESS_BASE   =
+MINVER          = -miphoneos-version-min=11.0
+BUILD_SDK       = iphoneos
 endif
+
+# Derived install dirs
+DESTROOT        := $(ROOTLESS_BASE)
+LIBDIR          := $(DESTROOT)$(PREFIX)/lib
+INCDIR          := $(DESTROOT)$(PREFIX)/include
+
 ifeq ($(DEBUG),1)
-OPT				= -O0
-DEBUG_FLAGS		= -DDEBUG=1 -g
+OPT             = -O0
+DEBUG_FLAGS     = -DDEBUG=1 -g
 else
 ifeq ($(shell type llvm-strip >/dev/null 2>&1 && echo 1),1)
-STRIP			?= llvm-strip
+STRIP           ?= llvm-strip
 else
 ifeq ($(shell type xcrun strip >/dev/null 2>&1 && echo 1),1)
-STRIP			?= strip
+STRIP           ?= strip
 else
 ifeq ($(shell type strip >/dev/null 2>&1 && echo 1),1)
-STRIP			?= strip
+STRIP           ?= strip
 endif
 endif
 endif
-OPT				= -O3
-DEBUG_FLAGS		= -DNDEBUG=1
+OPT             = -O3
+DEBUG_FLAGS     = -DNDEBUG=1
 endif
 
 IGCC            ?= xcrun -sdk $(BUILD_SDK) clang -arch arm64 -arch arm64e
 IGCC_FLAGS      ?= -Wall $(OPT) $(DEBUG_FLAGS) -I$(INC) -DTARGET=\"$(TARGET)\"
 DYLIB_FLAGS     ?= -shared $(MINVER) -Wl,-install_name,@rpath/$(TARGET).$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
-PLUGIN_FLAGS 	?= -shared $(MINVER) -Wl,-install_name,$(ROOTLESS_PATH)/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+
+# ---- fixed: install_name uses derived LIBDIR ----
+PLUGIN_FLAGS    ?= -shared $(MINVER) -Wl,-install_name,$(LIBDIR)/libkrw/$(TARGET)_tfp0.$(ABI_VERSION).dylib -Wl,-current_version,$(CURRENT_VERSION) -Wl,-compatibility_version,$(COMPAT_VERSION) -Wl,-no_warn_inits
+
 SIGN            ?= codesign
 SIGN_FLAGS      ?= -s -
 TAPI            ?= xcrun -sdk $(BUILD_SDK) tapi
 TAPI_FLAGS      ?= stubify --no-uuids --filetype=tbd-v2
 TAR             ?= bsdtar
 TAR_FLAGS       ?= --uid 0 --gid 0
-DEB_ARCH		?= iphoneos-arm$(ROOTLESS_ARCH)
+DEB_ARCH        ?= iphoneos-arm$(ROOTLESS_ARCH)
 
 .PHONY: all deb clean
 
 all: $(TARGET).$(ABI_VERSION).dylib $(TARGET)-tfp0.dylib $(TARGET).tbd
 
-deb: $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb $(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)-tfp0_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb
+deb: $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb \
+     $(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb \
+     $(PACKAGE_DOMAIN)$(TARGET)$(ABI_VERSION)-tfp0_$(CURRENT_VERSION)_iphoneos-arm$(ROOTLESS_ARCH).deb
 
 $(TARGET).$(ABI_VERSION).dylib: $(SRC)/libkrw.c $(INC)/*.h
 	$(IGCC) $(IGCC_FLAGS) $(DYLIB_FLAGS) -o $@ $(SRC)/libkrw.c
 ifdef STRIP
 	$(STRIP) -x $@
-#	$(info $(shell $(STRIP)))
 endif
 	$(SIGN) $(SIGN_FLAGS) $@
 
@@ -72,7 +87,6 @@ $(TARGET)-tfp0.dylib: $(SRC)/libkrw_tfp0.c $(INC)/*.h
 	$(IGCC) $(IGCC_FLAGS) $(PLUGIN_FLAGS) -o $@ $(SRC)/libkrw_tfp0.c
 ifdef STRIP
 	$(STRIP) -x $@
-#	$(info $(shell $(STRIP)))
 endif
 	$(SIGN) $(SIGN_FLAGS) $@
 
@@ -97,13 +111,14 @@ $(PKG)/dev/control.tar.gz: $(PKG)/dev/control
 $(PKG)/plugin/control.tar.gz: $(PKG)/plugin/control
 	$(TAR) $(TAR_FLAGS) -czf $@ --format ustar -C $(PKG)/plugin --exclude '.DS_Store' --exclude '._*' ./control
 
-$(PKG)/bin/data.tar.lzma: $(PKG)/bin/data$(ROOTLESS_PATH)/usr/lib/$(TARGET).$(ABI_VERSION).dylib
+# ---- fixed: package paths use $(LIBDIR)/$(INCDIR) directly ----
+$(PKG)/bin/data.tar.lzma: $(PKG)/bin/data$(LIBDIR)/$(TARGET).$(ABI_VERSION).dylib
 	$(TAR) $(TAR_FLAGS) -c --lzma -f $@ --format ustar -C $(PKG)/bin/data --exclude '.DS_Store' --exclude '._*' ./
 
-$(PKG)/dev/data.tar.lzma: $(PKG)/dev/data$(ROOTLESS_PATH)/usr/lib/$(TARGET).dylib $(PKG)/dev/data$(ROOTLESS_PATH)/usr/include/$(TARGET).h $(PKG)/dev/data$(ROOTLESS_PATH)/usr/include/$(TARGET)_plugin.h
+$(PKG)/dev/data.tar.lzma: $(PKG)/dev/data$(LIBDIR)/$(TARGET).dylib $(PKG)/dev/data$(INCDIR)/$(TARGET).h $(PKG)/dev/data$(INCDIR)/$(TARGET)_plugin.h
 	$(TAR) $(TAR_FLAGS) -c --lzma -f $@ --format ustar -C $(PKG)/dev/data --exclude '.DS_Store' --exclude '._*' ./
 
-$(PKG)/plugin/data.tar.lzma: $(PKG)/plugin/data$(ROOTLESS_PATH)/usr/lib/libkrw/$(TARGET)-tfp0.dylib
+$(PKG)/plugin/data.tar.lzma: $(PKG)/plugin/data$(LIBDIR)/libkrw/$(TARGET)-tfp0.dylib
 	$(TAR) $(TAR_FLAGS) -c --lzma -f $@ --format ustar -C $(PKG)/plugin/data --exclude '.DS_Store' --exclude '._*' ./
 
 $(PKG)/bin/debian-binary: | $(PKG)/bin
@@ -157,19 +172,23 @@ $(PKG)/plugin/control: | $(PKG)/plugin
 	  echo 'Homepage: https://github.com/Siguza/libkrw/'; \
 	) > $@
 
-$(PKG)/bin/data$(ROOTLESS_PATH)/usr/lib/$(TARGET).$(ABI_VERSION).dylib: $(TARGET).$(ABI_VERSION).dylib | $(PKG)/bin/data$(ROOTLESS_PATH)/usr/lib
+$(PKG)/bin/data$(LIBDIR)/$(TARGET).$(ABI_VERSION).dylib: $(TARGET).$(ABI_VERSION).dylib | $(PKG)/bin/data$(LIBDIR)
 	cp $< $@
 
-$(PKG)/dev/data$(ROOTLESS_PATH)/usr/lib/$(TARGET).dylib: | $(PKG)/dev/data$(ROOTLESS_PATH)/usr/lib
-	( cd "$(PKG)/dev/data$(ROOTLESS_PATH)/usr/lib"; ln -sf $(TARGET).$(ABI_VERSION).dylib $(TARGET).dylib; )
+$(PKG)/dev/data$(LIBDIR)/$(TARGET).dylib: | $(PKG)/dev/data$(LIBDIR)
+	( cd "$(PKG)/dev/data$(LIBDIR)"; ln -sf $(TARGET).$(ABI_VERSION).dylib $(TARGET).dylib; )
 
-$(PKG)/dev/data$(ROOTLESS_PATH)/usr/include/%.h: $(INC)/%.h | $(PKG)/dev/data$(ROOTLESS_PATH)/usr/include
+$(PKG)/dev/data$(INCDIR)/%.h: $(INC)/%.h | $(PKG)/dev/data$(INCDIR)
 	cp $< $@
 
-$(PKG)/plugin/data$(ROOTLESS_PATH)/usr/lib/libkrw/$(TARGET)-tfp0.dylib: $(TARGET)-tfp0.dylib | $(PKG)/plugin/data$(ROOTLESS_PATH)/usr/lib/libkrw
+$(PKG)/plugin/data$(LIBDIR)/libkrw/$(TARGET)-tfp0.dylib: $(TARGET)-tfp0.dylib | $(PKG)/plugin/data$(LIBDIR)/libkrw
 	cp $< $@
 
-$(PKG)/bin $(PKG)/dev $(PKG)/plugin $(PKG)/bin/data$(ROOTLESS_PATH)/usr/lib $(PKG)/dev/data$(ROOTLESS_PATH)/usr/lib $(PKG)/dev/data$(ROOTLESS_PATH)/usr/include $(PKG)/plugin/data$(ROOTLESS_PATH)/usr/lib/libkrw:
+$(PKG)/bin $(PKG)/dev $(PKG)/plugin \
+$(PKG)/bin/data$(LIBDIR) \
+$(PKG)/dev/data$(LIBDIR) \
+$(PKG)/dev/data$(INCDIR) \
+$(PKG)/plugin/data$(LIBDIR)/libkrw:
 	mkdir -p $@
 
 clean:
